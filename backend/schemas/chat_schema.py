@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 
 
-# 팀장님이 기획하신 훌륭한 입력 스키마 유지!
+# 입력 스키마 유지!
 class ChatRequest(BaseModel):
     meeting_id: str
     mode: str = "검증 모드"  # "검증 모드" 또는 "자문 모드"

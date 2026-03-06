@@ -1,0 +1,46 @@
+# =================================================================
+# 🏢 무한상사 AI 거버넌스 시스템 - Backend Dependencies
+# =================================================================
+# ⚠️ [파이썬 버전]: Python 3.10.x 환경에서 실행을 강력히 권장합니다. 
+# ⚠️ [가상환경 정책]: 본 프로젝트는 팀 협의에 따라 최상단(Root)에 단일 가상환경(venv)을 구성하여 공통으로 사용합니다.
+
+# 1. Core Data Science & Vector DB (의존성 충돌 방지를 위해 최우선 배치)
+# [팀 트러블슈팅 반영] ChromaDB 호환성을 위해 Numpy 1.x 버전으로 강제 고정
+numpy==1.26.4
+chromadb==0.4.24 
+
+# 2. Dependency Resolution (백엔드와 프론트엔드 최종 타협안)
+# [최종 수정] Streamlit 1.32.0 및 최신 AI 라이브러리 간의 모든 충돌 해결
+protobuf>=3.20,<5.0.0
+packaging>=23.2,<24.0
+rich>=10.14.0,<14.0.0
+tenacity>=8.1.0,<9.0.0
+
+# 3. Backend Core Engine (FastAPI 기반 고성능 API 서버)
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+pydantic>=2.7.0
+pydantic-settings>=2.2.1      # [추가] Pydantic V2 기반 안전한 환경변수(.env) 관리
+python-multipart>=0.0.9       # 프론트엔드 비디오 파일 업로드용
+aiofiles>=23.2.1              # [추가] 대용량 비디오 파일 비동기(Async) 논블로킹 저장
+
+# 4. Audio & Video Processing (영상 추출 및 오디오 전처리)
+yt-dlp>=2023.11.16
+pydub>=0.25.1                 # OpenAI STT 25MB 용량 제한 우회를 위한 오디오 분할/압축 처리용
+
+# 5. AI & LLM Orchestration (LangChain 및 AI 에이전트 연동)
+openai>=1.14.0
+langchain>=0.1.13
+langchain-community>=0.0.29
+langchain-openai>=0.1.1       # ChatOpenAI, OpenAIEmbeddings 전용
+langchain-text-splitters>=0.2.0
+tiktoken>=0.6.0               # OpenAI 토큰 비용 계산 및 청크 분할 최적화
+langgraph>=0.0.26             # [추가] AI 자율 리포트 생성 에이전트(Page 3) 워크플로우 구축용
+duckduckgo-search>=5.0.0      # [추가] AI 에이전트 자율 웹 리서치용 무료 검색 도구
+
+# =================================================================
+# 🛠️ [시스템 필수 설치 사항 - OS 레벨]
+# pydub 및 yt-dlp가 정상 작동하려면 PC(OS) 자체에 'FFmpeg'가 설치되어 있어야 합니다.
+# 🪟 Windows (cmd/PowerShell 무관): winget install ffmpeg
+# ⚠️ [주의]: FFmpeg 설치 완료 후 열려있는 터미널과 VS Code를 모두 재시작해야 적용됩니다.
+# =================================================================

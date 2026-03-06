@@ -18,7 +18,7 @@ if "system_mode" not in st.session_state:
     st.session_state.system_mode = "검증 모드"
 
 # ---------------------------------------------------------
-# Custom Enterprise CSS (팀장님의 훌륭한 디자인 100% 유지)
+# Custom Enterprise CSS (디자인 유지)
 # ---------------------------------------------------------
 st.markdown("""
 <style>
@@ -62,7 +62,7 @@ render_sidebar()
 # ---------------------------------------------------------
 # Data Fetcher & Streaming Helper
 # ---------------------------------------------------------
-# [수석의 개선 1] ttl=10 (10초 캐싱)으로 설정하여 서버 부하 방지 및 최신 DB 갱신 유지
+# [개선 1] ttl=10 (10초 캐싱)으로 설정하여 서버 부하 방지 및 최신 DB 갱신 유지
 @st.cache_data(ttl=10)
 def get_real_meeting_list():
     """백엔드 API를 호출하여 실제 DB에 저장된 회의 목록을 가져옵니다."""

@@ -1,0 +1,118 @@
+# =================================================================
+# 🏢 무한상사 AI 거버넌스 시스템 - 통합 .gitignore
+# =================================================================
+
+# -----------------------------------------------------------------
+# 1. 보안 및 환경 변수 (Security & Environments) - 절대 유출 금지
+# -----------------------------------------------------------------
+.env
+*.env
+.streamlit/credentials.toml
+
+# -----------------------------------------------------------------
+# 2. 대용량 미디어 및 업로드 파일 (Media & Uploads) - 깃허브 용량 초과 방지
+# -----------------------------------------------------------------
+uploads/
+media/
+videos/
+audio_chunks/
+*.mp4
+*.mp3
+*.wav
+*.m4a
+*.avi
+
+# -----------------------------------------------------------------
+# 3. AI 모델 캐시 및 Vector DB (AI/LLM Cache & Local DB)
+# -----------------------------------------------------------------
+chroma_db/
+.chroma/
+.cache/
+database/vector/*/
+!database/vector/config.yaml
+database/relational/*.db
+database/relational/*.sqlite3
+
+# -----------------------------------------------------------------
+# 4. 파이썬 로컬 가상환경 (Virtual Environments)
+# -----------------------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# -----------------------------------------------------------------
+# 5. 파이썬 캐시, 빌드 및 테스트 파일 (Python Cache & Build)
+# -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+downloads/
+*.egg-info/
+.installed.cfg
+*.egg
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+poetry.toml
+.ipynb_checkpoints/
+
+# -----------------------------------------------------------------
+# 6. 로그 및 임시 파일 (Logs & Temp Files)
+# -----------------------------------------------------------------
+logs/
+temp/
+*.log
+pip-log.txt
+
+# -----------------------------------------------------------------
+# 7. Streamlit 전용 설정 (Frontend/UI)
+# -----------------------------------------------------------------
+.streamlit/static/
+.streamlit/component_lib/
+
+# -----------------------------------------------------------------
+# 8. 운영체제 시스템 파일 (OS Specific)
+# -----------------------------------------------------------------
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.lnk
+
+# Mac
+.DS_Store
+
+# -----------------------------------------------------------------
+# 9. IDE 및 에디터 설정 (VS Code, Android Studio, IntelliJ 등)
+# -----------------------------------------------------------------
+### VS Code ###
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+.history/
+*.vsix
+
+### IntelliJ / Java / Kotlin / Android Studio (팀원 호환용) ###
+*.class
+bin/
+gen/
+out/
+/out/
+.gradle/
+*.iml
+*.iws
+.idea/
+.idea_modules/

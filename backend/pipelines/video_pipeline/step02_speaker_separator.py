@@ -1,45 +1,56 @@
-import logging
-import json
 import os
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import PromptTemplate
+import json
+import re
+import logging
+from openai import OpenAI
+from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
 class SpeakerSeparator:
-    def __init__(self, use_mock=False):
-        self.use_mock = use_mock
-        self.llm = ChatOpenAI(model="gpt-4o", temperature=0.0, api_key=os.getenv("OPENAI_API_KEY"))
+    def __init__(self):
+        # 환경 변수에서 키를 가져오거나 직접 설정된 키를 사용합니다.
+        self.api_key = os.getenv("OPENAI_API_KEY")
+        self.client = OpenAI(api_key=self.api_key)
 
-    def run(self, raw_text: str) -> list:
-        logger.info("[Step 2] AI 에이전트 기반 진짜 화자 분리 가동 중...")
+    def run(self, raw_transcript: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        if not raw_transcript:
+            return []
 
-        if self.use_mock:
-            return [{"speaker": "System", "time": "00:00", "text": "Mock Mode가 켜져 있습니다."}]
+        # 텍스트가 너무 길면 GPT가 힘들어하므로 상위 50개 문장만 예시로 처리하거나 조절 가능
+        text_to_analyze = "\n".join([f"[{t['start']}s] {t['text']}" for t in raw_transcript])
 
-        prompt = PromptTemplate(
-            input_variables=["text"],
-            template="""
-            당신은 세계 최고의 회의 대화 분석 AI 에이전트입니다.
-            아래의 텍스트를 분석하여 화자를 분리해 주세요.
+        # ⭐ f-string 안의 중괄호를 {{ }}로 이중 처리하여 파이썬 문법 에러 방지
+        prompt = f"""
+        당신은 회의록 분석 전문가입니다. 아래 대화 내용을 분석하여 '발표자 A', '참석자 B' 등으로 화자를 구분해 주세요.
+        반드시 아래의 JSON 배열 형식으로만 답변하세요.
+        
+        형식 예시: [{{ "start": 0.0, "speaker": "발표자 A", "text": "안녕하세요" }}]
 
-            [엄격한 규칙]
-            1. 원본 텍스트의 내용은 절대 누락하거나 지어내지(Hallucination) 말고 100% 반영하세요.
-            2. 반드시 아래의 JSON 배열(Array) 포맷으로만 출력하세요.
-            3. [매우 중요] 만약 입력 텍스트가 에러 메시지이거나, 너무 짧거나, 정상적인 대화가 아니라면 절대로 가상의 회의 내용을 지어내지 마세요! 그럴 경우 반드시 [{{"speaker": "System", "time": "00:00", "text": "정상적인 대화 스크립트를 추출하지 못했습니다."}}] 라고만 출력하세요.
-
-            [입력 텍스트]
-            {text}
-            """
-        )
+        내용:
+        {text_to_analyze}
+        """
 
         try:
-            chain = prompt | self.llm
-            response = chain.invoke({"text": raw_text})
-
-            clean_json_str = response.content.replace('```json', '').replace('```', '').strip()
-            return json.loads(clean_json_str)
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",  # 가성비 좋은 모델 사용
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0
+            )
+            
+            content = response.choices[0].message.content.strip()
+            
+            # 마크다운 제거 로직 (GPT가 ```json 이라고 붙여주는 경우 대비)
+            content = re.sub(r'```json|```', '', content).strip()
+            
+            # JSON 파싱
+            match = re.search(r'\[.*\]', content, re.DOTALL)
+            if match:
+                return json.loads(match.group(0))
+            else:
+                return json.loads(content)
 
         except Exception as e:
-            logger.error(f"❌ 화자 분리 AI 처리 중 오류 발생: {e}")
-            raise Exception("화자 분리 중 구조화(JSON)에 실패했습니다.")
+            logger.error(f"❌ Step 2 화자 분리 실패: {e}")
+            # 실패 시 원본이라도 유지해서 다음 단계(저장)로 넘어가게 함
+            return [{"start": t.get("start", 0), "speaker": "Unknown", "text": t.get("text", "")} for t in raw_transcript]

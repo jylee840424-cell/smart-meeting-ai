@@ -1,51 +1,56 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from services.video_service import VideoAnalysisService
+from services.database_service import DatabaseService # DB 서비스 추가
+import logging
+import json
 import uuid
-from schemas.chat_schema import UploadRequest
-# 방금 만든 작업 반장(Service)을 불러옵니다!
-from services.video_service import run_video_analysis_pipeline
 
-router = APIRouter(prefix="/video", tags=["Video Analysis"])
+logger = logging.getLogger(__name__)
+router = APIRouter()
+video_service = VideoAnalysisService()
+db_service = DatabaseService() # DB 서비스 인스턴스화
 
-# 임시 메모리 저장소 (서비스 로직과 상태를 공유함)
+# 메모리 DB (현재 세션용)
 VIDEO_DB = {}
 
-
+class VideoRequest(BaseModel):
+    video_url: str
 
 @router.post("/upload")
-async def start_video_analysis(request: UploadRequest, background_tasks: BackgroundTasks):
+async def upload_video(request: VideoRequest):
+    try:
+        # 서비스 내의 ID 생성 로직 사용 (기존에 쓰시던 방식이 있다면 그것을 따릅니다)
+        meeting_id = f"mtg_{uuid.uuid4().hex[:8]}"
+        
+        VIDEO_DB[meeting_id] = {"status": "processing", "percent": 0}
+        
+        # 분석 시작 (백그라운드에서 실행되도록 await)
+        # 만약 분석이 너무 오래 걸려 타임아웃 난다면 asyncio.create_task를 고려해야 합니다.
+        result = await video_service.run_pipeline(meeting_id, request.video_url, VIDEO_DB)
+        return result
+    except Exception as e:
+        logger.error(f"🔥 업로드 에러: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/video/status/{meeting_id}")
+async def get_video_status(meeting_id: str):
     """
-    영상 분석 시작 엔드포인트
-    무거운 분석 작업은 백그라운드(BackgroundTasks)로 넘기고, 프론트엔드에는 즉시 응답합니다.
+    프론트엔드가 'msg'가 없다고 징징대지 못하게 
+    무조건 기본값을 채워서 보내주는 안전 창구
     """
-    meeting_id = f"M-{uuid.uuid4().hex[:8]}"
-    
-    # 1. 초기 상태 세팅 (1단계)
-    VIDEO_DB[meeting_id] = {
-        "status": "processing", 
-        "current_step": 1, 
-        "percent": 5, 
-        "time_left": "분석 준비 중...", 
-        "msg": "파이프라인 환경을 설정하고 있습니다."
-    }
-    
-    # 2. [핵심] 백그라운드 태스크 실행 지시!
-    # API는 여기서 바로 끝나지만, 서버 뒷단에서는 run_video_analysis_pipeline이 묵묵히 돌아갑니다.
-    background_tasks.add_task(run_video_analysis_pipeline, meeting_id, request.video_url, VIDEO_DB)
-    
+    # 1. VIDEO_DB에서 데이터를 가져옵니다.
+    status_data = VIDEO_DB.get(meeting_id, {})
+
+    # 2. [필살기] .get()의 두 번째 인자를 활용해서 'msg'가 없으면 기본 문구를 보냅니다.
+    # 이렇게 하면 KeyError: 'msg'는 물리적으로 발생할 수 없습니다.
     return {
         "meeting_id": meeting_id,
-        "status": "processing",
-        "message": f"'{request.meeting_title}' 영상 분석 파이프라인이 백그라운드에서 가동되었습니다."
+        "status": status_data.get("status", "processing"),
+        "percent": status_data.get("percent", 0),
+        "msg": status_data.get("msg", "데이터를 처리 중입니다..."), # <-- 여기가 포인트!
+        "transcript": status_data.get("transcript", []),
+        "report": status_data.get("report", {"summary": ""}),
+        "steps_completed": status_data.get("steps_completed", 0),
+        "total_steps": 5
     }
-
-@router.get("/status/{meeting_id}")
-async def get_analysis_status(meeting_id: str):
-    """
-    분석 상태 조회 엔드포인트
-    프론트엔드가 1.5초마다 이 주소를 찔러서 현재 VIDEO_DB 상태를 가져갑니다.
-    """
-    if meeting_id not in VIDEO_DB:
-        raise HTTPException(status_code=404, detail="회의 기록을 찾을 수 없습니다.")
-
-    # 서비스 로직이 실시간으로 업데이트하고 있는 상태를 그대로 프론트엔드에 전달!
-    return VIDEO_DB[meeting_id]

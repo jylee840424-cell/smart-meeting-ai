@@ -116,3 +116,11 @@ out/
 *.iws
 .idea/
 .idea_modules/
+
+# 분석 완료된 텍스트 데이터
+database/processed_text/*.json
+# 임시 작업 폴더
+temp_audio/
+# Whisper 모델 파일
+.whisper/
+models/

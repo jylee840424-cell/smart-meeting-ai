@@ -1,9 +1,11 @@
 import streamlit as st
 import requests
 import time
+from components.sidebar import render_sidebar
 
 # 페이지 설정
 st.set_page_config(page_title="무한상사 - 영상 분석", layout="wide")
+render_sidebar()
 
 st.title("📹 회의 영상 분석 시스템")
 st.caption("AI 5단계 파이프라인을 통해 실시간으로 회의록을 생성합니다.")

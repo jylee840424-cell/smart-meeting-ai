@@ -56,12 +56,12 @@ async def get_meeting_details(meeting_id: str):
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
+        # 1. 쿼리 실행
         query = (
             "SELECT * FROM meetings ORDER BY rowid DESC LIMIT 1"
             if meeting_id == "latest"
             else "SELECT * FROM meetings WHERE meeting_id = ?"
         )
-
         params = () if meeting_id == "latest" else (meeting_id,)
 
         cursor.execute(query, params)
@@ -73,75 +73,63 @@ async def get_meeting_details(meeting_id: str):
                 status_code=404, detail="회의 데이터가 존재하지 않습니다."
             )
 
-        # DB의 'purpose' 컬럼에서 데이터를 가져와야 합니다.
-        raw_purpose = row["purpose"]
+        # 2. sqlite3.Row를 dict로 변환 (속성 에러 방지)
+        row_dict = dict(row)
+
+        # 3. purpose 데이터 파싱 (JSON 에러 방어)
+        raw_purpose = row_dict.get("purpose")
         summary_json = {}
 
         if raw_purpose:
             try:
+                # JSON 문자열인 경우 파싱 시도
                 summary_json = json.loads(raw_purpose)
-            except Exception:
-                # JSON 형식이 아닐 경우 단순 문자열 처리
-                summary_json = {"summary": {"done": [raw_purpose], "tbd": []}}
+            except (json.JSONDecodeError, TypeError):
+                # JSON이 아닌 일반 텍스트일 경우 수동으로 구조 생성
+                summary_json = {"summary": {"done": [str(raw_purpose)]}}
 
-        # -------------------------------
-        # summary JSON 파싱 & 방어
-        # -------------------------------
-        summary_json = {}
-        try:
-            summary_json = json.loads(row["purpose"]) if row["purpose"] else {}
-        except Exception:
-            logger.warning(
-                f"[{row['meeting_id']}] purpose JSON 파싱 실패, 기본 구조 생성"
-            )
-            summary_json = {}
+        # 4. Summary 데이터 구성 (기본값 보장)
+        inner_summary = summary_json.get("summary", {})
+        done_list = inner_summary.get("done", [])
+        if not isinstance(done_list, list):
+            done_list = [str(done_list)] if done_list else []
 
-        # 기본 구조 보장 및 필드 매핑
-        summary_data = {
-            "summary": summary_json.get("summary", {"done": [], "tbd": []}),
-            "actions": summary_json.get("actions", []),
-            "insights": summary_json.get("insights", {"kpi": "-", "risk_warning": "-"}),
-            "joiner": summary_json.get(
-                "joiner", row["joiner"] if "joiner" in row.keys() else "미지정"
-            ),
-        }
-
-        # display_text 생성 (프론트엔드 DONE 카드용)
-        done_lines = summary_data["summary"].get("done", [])
         display_text = (
-            "\n".join(done_lines) if done_lines else "분석된 요약 내용이 없습니다."
+            "\n".join(done_list) if done_list else "분석된 요약 내용이 없습니다."
         )
 
-        # ActionItem 리스트 변환
+        # 5. ActionItem 리스트 변환 (다양한 DB 키값 대응)
         formatted_actions = []
-        for act in summary_data["actions"]:
+        for act in summary_json.get("actions", []):
             if isinstance(act, dict):
                 formatted_actions.append(
                     ActionItem(
-                        Who=act.get("Who", act.get("manager", "미정")),
-                        What=act.get("What", act.get("task", "내용 없음")),
-                        When=act.get("When", act.get("deadline", "-")),
+                        Who=act.get("Who") or act.get("manager") or "미정",
+                        What=act.get("What") or act.get("task") or "내용 없음",
+                        When=act.get("When") or act.get("deadline") or "-",
                     )
                 )
 
+        # 6. 최종 결과 반환 (단 하나의 return문으로 정합성 유지)
         return MeetingReportResponse(
-            meta=MeetingMeta(title=row["title"] or "회의 분석 보고서"),
-            joiner=summary_data["joiner"],
+            meta=MeetingMeta(title=row_dict.get("title") or "제목 없음"),
+            joiner=row_dict.get("joiner") or "미지정",
             summary=SummarySchema(
                 display_text=display_text,
-                done=done_lines,
-                will_do=summary_data["actions"],
-                tbd=summary_data["summary"].get("tbd", []),
+                done=done_list,
+                will_do=[str(a) for a in summary_json.get("will_do", [])],
+                tbd=inner_summary.get("tbd", []),
             ),
             actions=formatted_actions,
             insights=InsightsSchema(
-                kpi=summary_data["insights"].get("kpi", "-"),
-                risk_warning=summary_data["insights"].get("risk_warning", "-"),
+                kpi=summary_json.get("insights", {}).get("kpi", "-"),
+                risk_warning=summary_json.get("insights", {}).get("risk_warning", "-"),
             ),
         )
+
     except Exception as e:
-        logger.error(f"서버 에러: {e}")
-        raise HTTPException(status_code=500, detail="리포트 생성 실패")
+        logger.error(f"❌ 서버 에러 상세: {e}")
+        raise HTTPException(status_code=500, detail=f"리포트 생성 실패: {str(e)}")
 
 
 # ==========================================================

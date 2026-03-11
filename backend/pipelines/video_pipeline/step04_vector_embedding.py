@@ -1,66 +1,97 @@
 import os
 import logging
 import json
+import shutil
 from dotenv import load_dotenv
-from typing import List, Dict, Any
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import Chroma
 
-# 로깅 설정
 logger = logging.getLogger(__name__)
 
-# 1. .env 로드 (진모님의 경로 로직 유지)
+# [기존 방어로직] 경로 및 .env 로드 유지
 current_dir = os.path.dirname(os.path.abspath(__file__))
 dotenv_path = os.path.normpath(os.path.join(current_dir, "../../../.env"))
 load_dotenv(dotenv_path)
 
+# 텔레메트리 에러 방지 (선택 사항)
+os.environ['ANONYMIZED_TELEMETRY'] = 'False'
+
 class VectorEmbeddingProcessor:
-    """
-    외부 라이브러리(Chroma 등) 설치 없이 
-    회의 텍스트 데이터를 관리하기 쉽게 저장하는 클래스.
-    """
     def __init__(self, use_mock: bool = False):
         self.use_mock = use_mock
         
-        # 프로젝트 루트 경로 기준 데이터 저장 위치 설정
-        base_dir = os.path.abspath(os.path.join(current_dir, "..", "..", ".."))
-        self.storage_directory = os.path.join(base_dir, "database", "processed_text")
+        # 프로젝트 루트 경로 계산
+        self.base_dir = os.path.abspath(os.path.join(current_dir, "..", "..", ".."))
         
-        if not os.path.exists(self.storage_directory):
-            os.makedirs(self.storage_directory)
+        # 1. 벡터 DB 최상위 경로 (이 하부에 meeting_id 폴더가 생깁니다)
+        self.vector_base_path = os.path.join(self.base_dir, "database", "vector")
+        
+        # 2. 사람이 읽을 수 있는 텍스트 백업 경로
+        self.backup_directory = os.path.join(self.base_dir, "database", "processed_text")
+        os.makedirs(self.backup_directory, exist_ok=True)
+        
+        if not self.use_mock:
+            self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
     def run(self, meeting_id: str, chunks: list) -> bool:
-        """
-        Step 03에서 생성된 청크 리스트를 JSON 파일로 깔끔하게 저장합니다.
-        추가 라이브러리 설치가 필요 없어 배포에 유리합니다.
-        """
         if self.use_mock:
-            logger.info("Mock 모드: 저장을 건너뜁니다.")
+            logger.info("Mock 모드: DB 적재 스킵")
             return True
+
+        if not chunks:
+            logger.error("[Step 4] 적재할 청크가 없습니다.")
+            return False
 
         try:
-            # 1. 저장 경로 설정 (회의별 ID 사용)
-            file_path = os.path.join(self.storage_directory, f"{meeting_id}_chunks.json")
+            # [핵심 수정] meeting_id별 개별 폴더 경로 설정
+            # 예: database/vector/mtg_0f3c57a4/
+            specific_vector_path = os.path.join(self.vector_base_path, meeting_id)
             
-            # 2. 413 에러 및 용량 방지: 순수 텍스트와 필수 메타데이터만 추출
-            clean_data = []
-            for chunk in chunks:
-                if isinstance(chunk, dict):
-                    content = chunk.get("page_content", chunk.get("text", ""))
-                    # 이미지 base64 등 무거운 데이터는 여기서 컷!
-                    metadata = {
-                        k: v for k, v in chunk.get("metadata", {}).items() 
-                        if k not in ["image_base64", "frame_data"]
-                    }
-                    clean_data.append({"content": content, "metadata": metadata})
-                else:
-                    clean_data.append({"content": str(chunk), "metadata": {}})
+            # 기존에 동일한 ID의 폴더가 있다면 초기화 (덮어쓰기 방어로직)
+            if os.path.exists(specific_vector_path):
+                shutil.rmtree(specific_vector_path)
+            os.makedirs(specific_vector_path, exist_ok=True)
 
-            # 3. JSON으로 저장 (다른 사람들도 바로 읽을 수 있음)
-            with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(clean_data, f, ensure_ascii=False, indent=2)
+            print(f"\n✨ [Step 4] [{meeting_id}] 개별 폴더 기반 저장 시작")
+            print(f"📂 저장 경로: {specific_vector_path}")
             
-            logger.info(f"✅ [Step 4] 텍스트 데이터 저장 완료: {file_path}")
+            # 메타데이터 정제 및 백업 데이터 준비
+            backup_data = []
+            for chunk in chunks:
+                chunk.metadata["meeting_id"] = meeting_id
+                clean_metadata = {
+                    k: v for k, v in chunk.metadata.items() 
+                    if k not in ["image_base64", "frame_data"]
+                }
+                chunk.metadata = clean_metadata
+                backup_data.append({
+                    "page_content": chunk.page_content,
+                    "metadata": chunk.metadata
+                })
+
+            # --- 1. JSON 파일 저장 (processed_text 폴더) ---
+            json_file_path = os.path.join(self.backup_directory, f"{meeting_id}_chunks.json")
+            with open(json_file_path, "w", encoding="utf-8") as f:
+                json.dump(backup_data, f, ensure_ascii=False, indent=4)
+            print(f"📄 [Step 4] JSON 백업 완료: {json_file_path}")
+
+            # --- 2. 개별 폴더에 Chroma 벡터 DB 적재 ---
+            # persist_directory를 specific_vector_path로 지정하여 폴더 격리
+            vectordb = Chroma.from_documents(
+                documents=chunks,
+                embedding=self.embeddings,
+                persist_directory=specific_vector_path,
+                collection_name="meeting_collection" # 개별 폴더이므로 이름은 고정해도 무관
+            )
+            
+            vectordb.persist()
+            
+            print(f"✅ [Step 4] DB 적재 성공 (경로: {specific_vector_path})")
+            logger.info(f"✅ [Step 4] [{meeting_id}] 개별 저장 성공")
+            
             return True
-            
+
         except Exception as e:
-            logger.error(f"❌ [Step 4] 데이터 저장 중 오류: {e}")
+            print(f"❌ [Step 4] 저장 중 치명적 오류: {e}")
+            logger.error(f"❌ [Step 4] 벡터 DB 적재 실패: {e}")
             return False

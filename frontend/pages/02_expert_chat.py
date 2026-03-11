@@ -50,9 +50,8 @@ st.markdown("""
 
     @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0');
     div[role="radiogroup"] label[data-baseweb="radio"] p { font-weight: 700 !important; color: #F8FAFC !important; font-size: 14px !important; }
-    div[role="radiogroup"] label:nth-child(1) p::before { content: "\\f0ec"; font-family: 'Material Symbols Outlined'; font-size: 20px; margin-right: 8px; color: #4ADE80; vertical-align: middle; }
-    div[role="radiogroup"] label:nth-child(2) p::before { content: "\\f0e2"; font-family: 'Material Symbols Outlined'; font-size: 20px; margin-right: 8px; color: #FBBF24; vertical-align: middle; }
-    
+    div[role="radiogroup"] label:nth-child(1) p::before { content: "fact_check"; font-family: 'Material Symbols Outlined'; font-size: 20px; margin-right: 8px; color: #4ADE80; vertical-align: middle; }
+    div[role="radiogroup"] label:nth-child(2) p::before { content: "school"; font-family: 'Material Symbols Outlined'; font-size: 20px; margin-right: 8px; color: #FBBF24; vertical-align: middle; }
     .stChatMessage { background-color: transparent !important; border-bottom: 1px solid #334155; padding-bottom: 15px; margin-bottom: 15px; }
 </style>
 """, unsafe_allow_html=True)
@@ -154,7 +153,7 @@ with col_main:
             with st.chat_message(log["role"]):
                 st.markdown(log["content"])
 
-    # [수석의 개선 2] current_id가 None이면 (회의가 없으면) 입력창 비활성화
+    # current_id가 None이면 (회의가 없으면) 입력창 비활성화
     is_disabled = (current_id is None)
     prompt = st.chat_input("회의가 없습니다. 영상을 먼저 분석해주세요." if is_disabled else "질의를 입력하세요 (모드에 따라 답변 구조가 달라집니다)", disabled=is_disabled)
     

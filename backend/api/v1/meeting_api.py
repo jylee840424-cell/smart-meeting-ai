@@ -80,50 +80,68 @@ async def get_meeting_details(meeting_id: str):
         raw_purpose = row_dict.get("purpose")
         summary_json = {}
 
-        if raw_purpose:
+        if isinstance(raw_purpose, str):
             try:
                 # JSON 문자열인 경우 파싱 시도
                 summary_json = json.loads(raw_purpose)
             except (json.JSONDecodeError, TypeError):
                 # JSON이 아닌 일반 텍스트일 경우 수동으로 구조 생성
-                summary_json = {"summary": {"done": [str(raw_purpose)]}}
+                summary_json = {
+                    "summary": {"done": [raw_purpose]},
+                    "actions": [],
+                    "insights": {},
+                }
+        else:
+            # 이미 dict(객체) 형태라면 그대로 사용
+            summary_json = raw_purpose if raw_purpose else {}
 
-        # 4. Summary 데이터 구성 (기본값 보장)
+        # 4. 요약 데이터 처리 (리스트를 불렛포인트로 변환)
         inner_summary = summary_json.get("summary", {})
         done_list = inner_summary.get("done", [])
-        if not isinstance(done_list, list):
-            done_list = [str(done_list)] if done_list else []
 
-        display_text = (
-            "\n".join(done_list) if done_list else "분석된 요약 내용이 없습니다."
-        )
+        # 리스트인 경우 줄바꿈을 포함한 텍스트로, 문자열인 경우 그대로 사용
+        if isinstance(done_list, list):
+            display_text = "\n".join([f"- {str(item)}" for item in done_list])
+        else:
+            display_text = str(done_list)
 
         # 5. ActionItem 리스트 변환 (다양한 DB 키값 대응)
         formatted_actions = []
         for act in summary_json.get("actions", []):
             if isinstance(act, dict):
+                # 모든 필드값을 str()로 감싸서 dict가 들어와도 에러가 나지 않게 방어합니다.
+                who_val = (
+                    act.get("Who") or act.get("manager") or act.get("owner") or "미정"
+                )
+                what_val = act.get("What") or act.get("task") or "내용 없음"
+                when_val = (
+                    act.get("When") or act.get("deadline") or act.get("due_date") or "-"
+                )
+
                 formatted_actions.append(
                     ActionItem(
-                        Who=act.get("Who") or act.get("manager") or "미정",
-                        What=act.get("What") or act.get("task") or "내용 없음",
-                        When=act.get("When") or act.get("deadline") or "-",
+                        Who=str(who_val),
+                        What=str(what_val),
+                        When=str(when_val),
                     )
                 )
 
-        # 6. 최종 결과 반환 (단 하나의 return문으로 정합성 유지)
+        # 6. 최종 결과 반환
         return MeetingReportResponse(
             meta=MeetingMeta(title=row_dict.get("title") or "제목 없음"),
             joiner=row_dict.get("joiner") or "미지정",
             summary=SummarySchema(
-                display_text=display_text,
+                display_text=str(display_text),  # 문자열 보장
                 done=done_list,
                 will_do=[str(a) for a in summary_json.get("will_do", [])],
                 tbd=inner_summary.get("tbd", []),
             ),
             actions=formatted_actions,
             insights=InsightsSchema(
-                kpi=summary_json.get("insights", {}).get("kpi", "-"),
-                risk_warning=summary_json.get("insights", {}).get("risk_warning", "-"),
+                kpi=str(summary_json.get("insights", {}).get("kpi", "-")),
+                risk_warning=str(
+                    summary_json.get("insights", {}).get("risk_warning", "-")
+                ),
             ),
         )
 
@@ -173,6 +191,32 @@ async def hitl_document_edit(request: HitlEditRequest):
         revised_text = response.content.strip()
 
         # --------------------------------------------------
+        # 데이터 구조 방어 로직 (step05 호환)
+        # --------------------------------------------------
+        # AI가 준 평문 텍스트를 step05가 인식할 수 있는 JSON 구조로 재포장합니다.
+        if request.document_type == "done":
+            # 요약 수정 시: 줄바꿈을 기준으로 리스트화하여 JSON 생성
+            final_save_value = json.dumps(
+                {
+                    "done": [
+                        line.strip()
+                        for line in revised_text.split("\n")
+                        if line.strip()
+                    ],
+                    "tbd": [],  # 기존 구조 유지
+                },
+                ensure_ascii=False,
+            )
+        elif request.document_type == "actions":
+            # 액션 수정 시: 리스트 안에 딕셔너리가 들어가는 구조 유지
+            final_save_value = json.dumps(
+                [{"Who": "전체", "What": revised_text, "When": "확인필요"}],
+                ensure_ascii=False,
+            )
+        else:
+            final_save_value = revised_text
+
+        # --------------------------------------------------
         # 수정된 문서 DB 저장
         # --------------------------------------------------
         from services.database_service import DatabaseService
@@ -182,7 +226,7 @@ async def hitl_document_edit(request: HitlEditRequest):
         success = db_service.update_hitl_document(
             request.meeting_id,
             request.document_type,
-            revised_text,
+            final_save_value,
         )
 
         if not success:

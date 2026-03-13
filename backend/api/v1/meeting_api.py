@@ -1,40 +1,31 @@
 # ==========================================================
-# Meeting API Router
 # 회의 데이터 조회 및 HITL 수정 기능 제공
 # ==========================================================
-
+import ast
 import json
 import logging
 import sqlite3
 from pathlib import Path
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-
-from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
+from schemas.meeting_schema import MeetingReportResponse
+from services.database_service import DatabaseService
 
-from schemas.meeting_schema import (
-    ActionItem,
-    InsightsSchema,
-    MeetingMeta,
-    MeetingReportResponse,
-    SummarySchema,
-)
-
+# FastAPI 라우터 설정
 router = APIRouter(prefix="/meetings", tags=["Meeting History"])
 logger = logging.getLogger(__name__)
 
-# DB 경로 설정
+# 1. LLM 및 DB 서비스 초기화
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)  # 회의 문서 수정용 LLM
+db_service = DatabaseService()  # DB 업데이트 처리 서비스
+
+# DB 파일 경로 설정
 BASE_DIR = Path(__file__).resolve().parents[3]
 DB_PATH = BASE_DIR / "database" / "relational" / "governance.db"
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
 
-
-# ----------------------------------------------------------
-# 요청 데이터 Schema (HITL 수정 요청)
-# ----------------------------------------------------------
+# HITL 수정 요청 데이터 모델
 class HitlEditRequest(BaseModel):
     meeting_id: str
     document_type: str
@@ -42,164 +33,171 @@ class HitlEditRequest(BaseModel):
     prompt: str
 
 
+# SQLite DB 연결 생성
+def get_db_connection():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row  # 컬럼명 기반 접근 가능
+    return conn
+
+
 # ==========================================================
-# [GET] 최신/특정 회의 리포트 조회
+# [GET] 회의 리포트 조회
 # ==========================================================
 @router.get("/details/{meeting_id}", response_model=MeetingReportResponse)
 async def get_meeting_details(meeting_id: str):
+    conn = None
     try:
-        if not DB_PATH.exists():
-            logger.error(f"❌ DB 파일을 찾을 수 없습니다.: {DB_PATH}")
-            raise HTTPException(status_code=500, detail="데이터베이스 연결 오류")
-
-        conn = sqlite3.connect(str(DB_PATH))
-        conn.row_factory = sqlite3.Row
+        conn = get_db_connection()
         cursor = conn.cursor()
 
-        # 1. 쿼리 실행
-        query = (
-            "SELECT * FROM meetings ORDER BY rowid DESC LIMIT 1"
-            if meeting_id == "latest"
-            else "SELECT * FROM meetings WHERE meeting_id = ?"
-        )
-        params = () if meeting_id == "latest" else (meeting_id,)
+        # Latest 요청 시 가장 최근 회의 조희
+        if meeting_id == "latest":
+            cursor.execute("SELECT * FROM meetings ORDER BY created_at DESC LIMIT 1")
+        else:
+            cursor.execute("SELECT * FROM meetings WHERE meeting_id = ?", (meeting_id,))
 
-        cursor.execute(query, params)
         row = cursor.fetchone()
-        conn.close()
-
         if not row:
-            raise HTTPException(
-                status_code=404, detail="회의 데이터가 존재하지 않습니다."
-            )
+            raise HTTPException(status_code=404, detail="회의 정보를 찾을 수 없습니다.")
 
-        # 2. sqlite3.Row를 dict로 변환 (속성 에러 방지)
-        row_dict = dict(row)
-
-        # 3. purpose 데이터 파싱 (JSON 에러 방어)
-        raw_purpose = row_dict.get("purpose")
-        summary_json = {}
-
-        if raw_purpose:
-            try:
-                # JSON 문자열인 경우 파싱 시도
-                summary_json = json.loads(raw_purpose)
-            except (json.JSONDecodeError, TypeError):
-                # JSON이 아닌 일반 텍스트일 경우 수동으로 구조 생성
-                summary_json = {"summary": {"done": [str(raw_purpose)]}}
-
-        # 4. Summary 데이터 구성 (기본값 보장)
-        inner_summary = summary_json.get("summary", {})
-        done_list = inner_summary.get("done", [])
-        if not isinstance(done_list, list):
-            done_list = [str(done_list)] if done_list else []
-
-        display_text = (
-            "\n".join(done_list) if done_list else "분석된 요약 내용이 없습니다."
-        )
-
-        # 5. ActionItem 리스트 변환 (다양한 DB 키값 대응)
-        formatted_actions = []
-        for act in summary_json.get("actions", []):
-            if isinstance(act, dict):
-                formatted_actions.append(
-                    ActionItem(
-                        Who=act.get("Who") or act.get("manager") or "미정",
-                        What=act.get("What") or act.get("task") or "내용 없음",
-                        When=act.get("When") or act.get("deadline") or "-",
-                    )
-                )
-
-        # 6. 최종 결과 반환 (단 하나의 return문으로 정합성 유지)
-        return MeetingReportResponse(
-            meta=MeetingMeta(title=row_dict.get("title") or "제목 없음"),
-            joiner=row_dict.get("joiner") or "미지정",
-            summary=SummarySchema(
-                display_text=display_text,
-                done=done_list,
-                will_do=[str(a) for a in summary_json.get("will_do", [])],
-                tbd=inner_summary.get("tbd", []),
-            ),
-            actions=formatted_actions,
-            insights=InsightsSchema(
-                kpi=summary_json.get("insights", {}).get("kpi", "-"),
-                risk_warning=summary_json.get("insights", {}).get("risk_warning", "-"),
-            ),
-        )
+        report_dict = dict(row)
 
     except Exception as e:
-        logger.error(f"❌ 서버 에러 상세: {e}")
-        raise HTTPException(status_code=500, detail=f"리포트 생성 실패: {str(e)}")
+        logger.error(f"DB 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail="데이터베이스 연동 실패")
+    finally:
+        if conn:
+            conn.close()
+
+    # DB 데이터 → API 응답 구조로 변환
+    try:
+        purpose_data = json.loads(report_dict.get("purpose", "{}"))
+
+        # 중첩된 summary 구조 처리
+        s_data = purpose_data.get("summary", {})
+        if isinstance(s_data, dict) and "summary" in s_data:
+            s_data = s_data["summary"]
+
+        summary_obj = {
+            "display_text": s_data.get("display_text")
+            or report_dict.get("details", "분석 중..."),
+            "done": s_data.get("done") if isinstance(s_data.get("done"), list) else [],
+            "will_do": (
+                s_data.get("will_do") if isinstance(s_data.get("will_do"), list) else []
+            ),
+            "tbd": s_data.get("tbd") if isinstance(s_data.get("tbd"), list) else [],
+        }
+
+        # --------------------------------------------------
+        # actions 데이터 파싱
+        # - 문자열 / JSON / 리스트 등 다양한 형태 대응
+        # --------------------------------------------------
+        actions_raw = report_dict.get("actions", [])
+
+        if isinstance(actions_raw, str):
+            actions_raw = actions_raw.strip()
+            if actions_raw:
+                try:
+                    # JSON 형태 파싱
+                    actions_raw = json.loads(actions_raw)
+                except:
+                    try:
+                        # Python dict 문자열 파싱
+                        actions_raw = ast.literal_eval(actions_raw)
+                    except:
+                        # 실패 시 줄바꿈으로 분리
+                        actions_raw = [
+                            line.strip()
+                            for line in actions_raw.splitlines()
+                            if line.strip()
+                        ]
+            else:
+                actions_raw = []
+
+        # FastAPI 응답 모델 규격에 맞게 정리
+        actions_list = []
+        if isinstance(actions_raw, list):
+            for item in actions_raw:
+
+                # 문자열 형태 dict 변환
+                if isinstance(item, str) and (
+                    item.startswith("{") or item.startswith("[")
+                ):
+                    try:
+                        item = ast.literal_eval(item)
+                    except:
+                        pass
+
+                if isinstance(item, dict):
+                    actions_list.append(
+                        {
+                            "Who": str(item.get("Who") or item.get("who") or "전체"),
+                            "What": str(
+                                item.get("What") or item.get("what") or "내용 없음"
+                            ),
+                            "When": str(
+                                item.get("When") or item.get("when") or "확인필요"
+                            ),
+                        }
+                    )
+
+                # dict가 아닌 문자열인 경우
+                elif item:
+                    actions_list.append(
+                        {"Who": "전체", "What": str(item), "When": "확인필요"}
+                    )
+
+        # --------------------------------------------------
+        # 최종 API 응답 구조 반환
+        # --------------------------------------------------
+        return {
+            "meta": {"title": report_dict.get("title") or "제목 없음"},
+            "meeting_id": report_dict.get("meeting_id")
+            or report_dict.get("id")
+            or "latest",
+            "joiner": report_dict.get("joiner") or "미지정",
+            "summary": summary_obj,
+            "actions": actions_list,
+            "insights": {
+                "kpi": report_dict.get("kpi", "-"),
+                "risk_warning": report_dict.get("risks", "-"),
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Mapping Error: {e}")
+        raise HTTPException(status_code=500, detail="데이터 변환 오류")
 
 
 # ==========================================================
-# [POST] HITL수정 요청 처리
+# [POST] 실시간 수정
 # ==========================================================
 @router.post("/workflow/hitl-edit")
-async def hitl_document_edit(request: HitlEditRequest):
-    """
-    사용자 지시사항(Prompt)을 반영하여 기존 문서를 AI로 재작성
-    """
-    logger.info(
-        f"✍️ [HITL 편집 요청] Type: {request.document_type}, Meeting ID: {request.meeting_id}"
-    )
-
+async def edit_meeting_document(request: HitlEditRequest):
     try:
-        # --------------------------------------------------
-        # HITL 수정용 프롬프트
-        # --------------------------------------------------
-        hitl_prompt = PromptTemplate(
-            input_variables=["current", "instruction"],
-            template="""
-            당신은 전문 문서 편집 AI입니다. 
-            아래의 기존 내용을 사용자의 지시사항에 맞게 수정해주세요.
-            
-            [기존 내용]
-            {current}
-            
-            [수정 지시사항]
-            {instruction}
-            
-            수정된 내용만 깔끔하게 반환하세요.
-            """,
-        )
+        # LLM 수정 요청 프롬프트 생성
+        prompt_text = f"수정분야: {request.document_type}\n현재: {request.current_text}\n요청: {request.prompt}\n# 수정된 본문만 출력."
 
-        chain = hitl_prompt | llm
-
-        response = chain.invoke(
-            {"current": request.current_text, "instruction": request.prompt}
-        )
-
+        response = llm.invoke(prompt_text)
         revised_text = response.content.strip()
 
-        # --------------------------------------------------
-        # 수정된 문서 DB 저장
-        # --------------------------------------------------
-        from services.database_service import DatabaseService
+        # DB 컬럼명 매핑 처리
+        doc_type = request.document_type
+        if doc_type == "risk_warning":
+            doc_type = "risks"
 
-        db_service = DatabaseService()
-
+        # 수정 결과 DB 저장
         success = db_service.update_hitl_document(
-            request.meeting_id,
-            request.document_type,
-            revised_text,
+            meeting_id=request.meeting_id,
+            document_type=doc_type,
+            revised_text=revised_text,
         )
 
         if not success:
-            raise HTTPException(status_code=500, detail="DB 저장에 실패했습니다.")
+            raise HTTPException(status_code=500, detail="DB 저장 실패")
 
-        return {
-            "status": "success",
-            "revised_text": revised_text,
-        }
-
-    except HTTPException:
-        raise
+        return {"status": "success", "revised_text": revised_text}
 
     except Exception as e:
-        logger.error(f"❌ HITL 편집 실패: {e}")
-
-        raise HTTPException(
-            status_code=500,
-            detail="AI 수정 처리 중 오류가 발생했습니다.",
-        )
+        logger.error(f"HITL Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

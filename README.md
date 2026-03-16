@@ -62,7 +62,7 @@ streamlit run app.py
 📂 프로젝트 구조 (Architecture)
 우리 프로젝트는 역할과 책임이 명확히 분리된 Layered Architecture(계층형 아키텍처)를 따릅니다.
 
-Plaintext
+```text
 smart-meeting-ai/
 ├── backend/               # FastAPI 백엔드 (API 및 AI 엔진)
 │   ├── api/v1/            # API 엔드포인트 라우터 (chat, meeting, video)
@@ -82,7 +82,7 @@ smart-meeting-ai/
 │   ├── relational/        # 메타데이터 DB (SQLite, schema.sql)
 │   └── vector/            # AI RAG용 벡터 DB (Chroma)
 └── infrastructure/        # 클라우드 배포 인프라 설정 (Docker Compose)
-
+```
 
 🧠 시스템 상세 설계 (System Design)
 세부적인 아키텍처 및 시스템 동작 원리.

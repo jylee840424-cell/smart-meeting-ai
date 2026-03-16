@@ -22,34 +22,42 @@ AI 라이브러리(ChromaDB, Numpy 등)의 완벽한 호환성과 팀원 간의 
 
 ```bash
 # 1-1. 가상환경 생성 및 활성화
-python -m venv .venv
+py -3.10 -m venv .venv
 source .venv/Scripts/activate  # Windows 환경: .venv\Scripts\activate
+
+# pip 최신 버전 업데이트 (의존성 충돌 방지)
+python -m pip install --upgrade pip
 
 # 1-2. 백엔드 & 프론트엔드 패키지 독립 설치
 pip install -r backend/requirements.txt
 pip install -r frontend/requirements.txt
+```
 
 2. 환경 변수 (.env) 세팅
 프로젝트 최상단 폴더(Root)에 .env 파일을 생성하고 아래의 인증 키를 입력하세요.
 
 코드 스니펫
+```env
 OPENAI_API_KEY="sk-당신의-오픈AI-API-키"
+```
 
 3. 서버 실행 (Local Development)
 터미널을 2개 열어 백엔드와 프론트엔드를 각각 실행합니다.
 
 [Terminal 1: Backend 서버 실행]
 
-Bash
+```bash
 cd backend
 python main.py
+```
 # 서버 가동 확인 및 API 문서: http://localhost:8000/docs
 
 [Terminal 2: Frontend UI 실행]
 
-Bash
+```bash
 cd frontend
 streamlit run app.py
+```
 # 브라우저에서 UI가 자동 실행되며 무한상사 AI 시스템에 접속됩니다.
 📂 프로젝트 구조 (Architecture)
 우리 프로젝트는 역할과 책임이 명확히 분리된 Layered Architecture(계층형 아키텍처)를 따릅니다.
@@ -141,12 +149,14 @@ FFmpeg 설치 가이드 (Windows 요약본)
 
 1. 명령 프롬프트(cmd) 또는 PowerShell을 열고 아래 명령어를 실행합니다.
    
-   bash
+   ```bash
    winget install ffmpeg
+   ```
 
 설치가 끝나면 환경변수 적용을 위해 열려있는 터미널과 VS Code를 모두 껐다가 다시 켜주세요.
 
 터미널에 아래 명령어를 입력하여 정상 설치를 확인합니다.
 
-    Bash
+    ```bash
     ffmpeg -version
+    ```

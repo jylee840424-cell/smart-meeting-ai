@@ -1,42 +1,33 @@
+# ==========================================
+# 🎨 Frontend Dependencies
+# Project: Smart Meeting AI Governance
+# ==========================================
 
-# =================================================================
-# 🏢 무한상사 AI 거버넌스 시스템 - Frontend Dependencies (MVP Lean 버전)
-# =================================================================
+# 1. Core Web Framework (UI & 화면 구성)
+streamlit==1.55.0
+watchdog==6.0.0
+tornado==6.5.5
 
-# 1. Core UI Framework
-streamlit==1.32.0             # 프론트엔드 렌더링 엔진 (안정성 위해 버전 고정)
-watchdog==6.0.0               # Streamlit 실시간 코드 변경 감지 및 자동 새로고침
-tornado==6.5.5                # Streamlit 내부 웹 서버 구동용
+# 2. Data Visualization & Manipulation (차트 및 데이터)
+pandas==2.3.3
+altair==5.5.0
+plotly==6.6.0
+pydeck==0.9.1
+pyarrow==23.0.1
+pillow==10.4.0
 
-# 2. Backend Communication
-requests==2.32.5              # 백엔드(FastAPI) 통신 및 RAG 챗봇 스트리밍 수신
+# 3. HTTP Client & API Comms (백엔드 통신)
+requests==2.32.5
+tenacity==8.5.0
 
-# 3. Data Processing & Visualization
-pandas==2.3.3                 # Action Reports의 데이터 테이블(DataFrame) 처리용
-plotly==6.6.0                 # [전략적 유지] 대시보드 및 리스크 분석용 인터랙티브 차트
-altair==5.5.0                 # Streamlit 기본 내장 차트 렌더링 최적화
-pyarrow==23.0.1               # 대용량 데이터프레임 고속 직렬화/역직렬화
-
-# 4. Environment Variables
-python-dotenv>=1.0.1          # BACKEND_URL 등 API 주소를 .env에서 안전하게 로드
-
-# 5. Dependency Resolution (팀 트러블슈팅 및 버전 충돌 방지)
-protobuf==4.25.8              # [핵심] Streamlit 백지장 현상 방지용 하드 락킹
-packaging==23.2               # [핵심] 버전 파싱 충돌 방지
-numpy==1.26.4                 # Pandas 및 차트 라이브러리 호환성 강제 고정
-tenacity==8.5.0               # 재시도 로직(Retry) 안정성 확보
-
-# =================================================================
-# 6. Streamlit Sub-dependencies (명시적 하드 락킹)
-# 팀원 간 완벽한 환경 동기화를 위해 Streamlit의 주요 하위 패키지 버전을 고정합니다.
-# =================================================================
+# 4. Utilities & Transitive Dependencies (기타 서브 패키지)
 blinker==1.9.0
 cachetools==5.5.2
 click==8.3.1
 markdown-it-py==4.0.0
 mdurl==0.1.2
-pillow==10.4.0
-pydeck==0.9.1
+packaging==23.2
+protobuf>=5.0,<7.0
 Pygments==2.19.2
 rich==13.9.4
 smmap==5.0.3

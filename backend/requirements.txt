@@ -1,62 +1,163 @@
-# =================================================================
-# 🏢 무한상사 AI 거버넌스 시스템 - Backend Dependencies
-# =================================================================
-# ⚠️ [파이썬 버전]: Python 3.10.x 환경에서 실행을 강력히 권장합니다. 
-# ⚠️ [가상환경 정책]: 본 프로젝트는 팀 협의에 따라 최상단(Root)에 단일 가상환경(venv)을 구성하여 공통으로 사용합니다.
+# ==========================================
+# 🧠 Backend & AI Agents Dependencies
+# Project: Smart Meeting AI Governance
+# ==========================================
 
-# 1. Core Data Science & Vector DB (의존성 충돌 방지를 위해 최우선 배치)
-# [팀 트러블슈팅 반영] ChromaDB 호환성을 위해 Numpy 1.x 버전으로 강제 고정
-numpy==1.26.4
-chromadb==0.5.23
-chroma-hnswlib==0.7.6
-SQLAlchemy==2.0.48
-
-# 2. Dependency Resolution (백엔드와 프론트엔드 최종 타협안)
-# [최종 수정] Streamlit 및 최신 AI 라이브러리 간의 모든 충돌 해결을 위한 하드 락킹
-protobuf==4.25.8
-packaging==23.2
-rich==13.9.4
-tenacity==8.5.0
-
-# 3. Backend Core Engine (FastAPI 기반 고성능 API 서버)
+# 1. Core API Server (FastAPI 프레임워크 및 서버)
 fastapi==0.135.1
 uvicorn==0.41.0
 starlette==0.52.1
 pydantic==2.12.5
-pydantic-settings==2.13.1      # [추가] Pydantic V2 기반 안전한 환경변수(.env) 관리
-python-multipart==0.0.22       # 프론트엔드 비디오 파일 업로드용
-aiofiles==25.1.0               # [추가] 대용량 비디오 파일 비동기(Async) 논블로킹 저장
+pydantic-settings==2.13.1
+pydantic_core==2.41.5
+python-multipart==0.0.22
 
-# 4. Audio, Video & Heavy ML Processing (영상 추출 및 오디오 전처리)
-yt-dlp==2026.3.3
-pydub==0.25.1                  # OpenAI STT 25MB 용량 제한 우회를 위한 오디오 분할/압축 처리용
-torch==2.10.0                  # 로컬 AI 연산 및 Whisper 가동 엔진
-openai-whisper==20250625       # 오디오 텍스트 변환(STT) 모델
-onnxruntime==1.23.2
-
-# 5. AI & LLM Orchestration (LangChain 및 AI 에이전트 연동)
-openai==1.109.1
+# 2. LLM & AI Agents Framework (LangChain & OpenAI)
 langchain==0.2.17
 langchain-core==0.2.43
 langchain-community==0.2.19
-langchain-openai==0.1.25       # ChatOpenAI, OpenAIEmbeddings 전용
-langchain-chroma==0.1.4        # 최신 ChromaDB 연동 모듈
+langchain-openai==0.1.25
 langchain-text-splitters==0.2.4
-tiktoken==0.12.0               # OpenAI 토큰 비용 계산 및 청크 분할 최적화
-langgraph==1.1.0               # [추가] AI 자율 리포트 생성 에이전트 워크플로우 구축용
-langgraph-checkpoint==4.0.1
-langgraph-sdk==0.3.11
-duckduckgo-search==8.1.1       # [추가] AI 에이전트 자율 웹 리서치용 무료 검색 도구
+langgraph==0.2.62
+langgraph-checkpoint==2.0.8
+langgraph-sdk==0.1.61
+langsmith==0.1.147
+openai==1.109.1
+tiktoken==0.12.0
+tokenizers==0.20.3
 
-# 6. Telemetry & Observability (로깅 및 모니터링 경고 방지용)
+# 3. Heavy Machine Learning & Audio Processing (음성 처리 및 딥러닝)
+torch==2.10.0
+openai-whisper==20250625
+yt-dlp==2026.3.3
+pydub==0.25.1
+numpy==1.26.4
+onnxruntime==1.23.2
+llvmlite==0.46.0
+numba==0.64.0
+
+# 4. Vector Database & ORM (ChromaDB 및 관계형 DB)
+chromadb==0.5.23
+chroma-hnswlib==0.7.6
+langchain-chroma==0.1.4
+SQLAlchemy==2.0.48
+PyPika==0.51.1
+
+# 5. Telemetry & Observability (로깅 및 모니터링)
 opentelemetry-api==1.40.0
 opentelemetry-sdk==1.40.0
 opentelemetry-proto==1.40.0
+opentelemetry-exporter-otlp-proto-common==1.40.0
+opentelemetry-exporter-otlp-proto-grpc==1.40.0
+opentelemetry-instrumentation==0.61b0
+opentelemetry-instrumentation-asgi==0.61b0
+opentelemetry-instrumentation-fastapi==0.61b0
 opentelemetry-semantic-conventions==0.61b0
+opentelemetry-util-http==0.61b0
 
-# =================================================================
-# 🛠️ [시스템 필수 설치 사항 - OS 레벨]
-# pydub 및 yt-dlp가 정상 작동하려면 PC(OS) 자체에 'FFmpeg'가 설치되어 있어야 합니다.
-# 🪟 Windows (cmd/PowerShell 무관): winget install ffmpeg
-# ⚠️ [주의]: FFmpeg 설치 완료 후 열려있는 터미널과 VS Code를 모두 재시작해야 적용됩니다.
-# =================================================================
+# 6. Async & Network Utilities (비동기 및 통신 유틸리티)
+aiohttp==3.13.3
+aiofiles==25.1.0
+aiohappyeyeballs==2.6.1
+aiosignal==1.4.0
+anyio==4.12.1
+async-timeout==4.0.3
+httpx==0.28.1
+httpx-sse==0.4.3
+httpcore==1.0.9
+httptools==0.7.1
+websockets==16.0
+websocket-client==1.9.0
+urllib3==2.6.3
+yarl==1.23.0
+
+# 7. General Utilities & Cryptography (기타 시스템/보안 유틸)
+annotated-doc==0.0.4
+annotated-types==0.7.0
+asgiref==3.11.1
+attrs==25.4.0
+backoff==2.2.1
+bcrypt==5.0.0
+build==1.3.0
+certifi==2026.2.25
+charset-normalizer==3.4.5
+colorama==0.4.6
+coloredlogs==15.0.1
+dataclasses-json==0.6.7
+Deprecated==1.3.1
+distro==1.9.0
+duckduckgo_search==8.1.1
+durationpy==0.10
+exceptiongroup==1.3.1
+filelock==3.25.1
+flatbuffers==25.12.19
+frozenlist==1.8.0
+fsspec==2026.2.0
+gitdb==4.0.12
+GitPython==3.1.46
+googleapis-common-protos==1.73.0
+greenlet==3.3.2
+grpcio==1.78.0
+h11==0.16.0
+hf-xet==1.3.2
+huggingface_hub==0.36.2
+humanfriendly==10.0
+idna==3.11
+importlib_metadata==8.4.0
+importlib_resources==6.5.2
+Jinja2==3.1.6
+jiter==0.13.0
+jsonpatch==1.33
+jsonpointer==3.0.0
+jsonschema==4.26.0
+jsonschema-specifications==2025.9.1
+kubernetes==35.0.0
+lxml==6.0.2
+MarkupSafe==3.0.3
+marshmallow==3.26.2
+mmh3==5.2.1
+more-itertools==10.8.0
+mpmath==1.3.0
+multidict==6.7.1
+mypy_extensions==1.1.0
+narwhals==2.18.0
+networkx==3.4.2
+oauthlib==3.3.1
+orjson==3.11.7
+ormsgpack==1.12.2
+overrides==7.7.0
+posthog==7.9.10
+primp==1.1.3
+propcache==0.4.1
+pulsar-client==3.10.0
+pybase64==1.4.3
+pyproject_hooks==1.2.0
+pyreadline3==3.5.4
+python-dateutil==2.9.0.post0
+python-dotenv==1.2.2
+pytz==2026.1.post1
+PyYAML==6.0.3
+referencing==0.37.0
+regex==2026.2.28
+requests-oauthlib==2.0.0
+requests-toolbelt==1.0.0
+rpds-py==0.30.0
+shellingham==1.5.4
+six==1.17.0
+sniffio==1.3.1
+sympy==1.14.0
+tqdm==4.67.3
+typer==0.24.1
+typing-inspect==0.9.0
+typing-inspection==0.4.2
+typing_extensions==4.15.0
+uuid_utils==0.14.1
+watchfiles==1.1.1
+wrapt==1.17.3
+xxhash==3.6.0
+zipp==3.23.0
+zstandard==0.25.0
+requests==2.32.3
+
+# 8. Vision & Image Processing (비전 및 이미지 처리)
+opencv-python==4.10.0.84
